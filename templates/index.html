@@ -1,0 +1,21 @@
+{% include 'header.html' %}
+
+	<div id="nav">
+  	  <a href="http://blizzard.ornl.gov" class="button">Blizzard</a>
+  	  <a href="http://oceans11.lanl.gov/cism/" class="button">CISM</a>
+	</div>
+	<div id="content">
+		<h2>Summary</h2>
+		  <p>Tests run:</p>
+		  <ul>
+		    {% for case in testCases %}
+		        <li>{{case}}</li>
+		    {% endfor %}
+		  </ul>
+		<h2>Test Results</h2>
+		  {% for test in testsRun %}
+		     <a href="tests/{{test}}.html">Results for {{test}}</a> 
+		     <br>
+		  {% endfor %}
+
+{% include 'footer.html' %}

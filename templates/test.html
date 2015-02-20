@@ -1,0 +1,95 @@
+{% include 'header.html' %}
+  <div id="nav">
+    <a href="../index.html" class="button">Home</a>
+    <a href="http://blizzard.ornl.gov" class="button">Blizzard</a>
+    <a href="http://oceans11.lanl.gov/cism/" class="button">CISM</a> 
+  </div>
+  <div id="content">
+  <h2>{{testName}}</h2>
+  
+  <h3>Details</h3>
+  <p>
+    {{testDescription}}
+  </p>
+  
+  <h3>Plots</h3>
+
+    {% for img in testImages %}
+      {% if img != [] %} 
+      <div class="gallery">
+      	<div style="float: left; display: inline;">
+	        <a target="_blank" href="{{imgDir}}/{{img}}">
+	        	<img src="{{imgDir}}/{{img}}" alt="{{imgDir}}/{{img}}" width="110">
+	        </a>
+	        <div class="description">{{img}}</div>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  
+  <br style="clear: both" />
+  <h3>Results</h3>
+    {% for case in testsRun %}
+      <h4>{{case}}</h4>
+      
+      
+      <p style="font-weight: 600;"> 
+        Bit for Bit 
+        <a style="font-size: small; font-style: italic">
+          Click on failures to see difference plots
+        </a> 
+      </p>
+
+      <table class="tabbed">
+      <tr>
+        <th>Output File</th>
+        <th>Status</th>
+        <th>Total Error</th>
+      </tr>
+      {% for file, details in bitForBitDetails[case].iteritems() %}
+        <tr>
+          <td style="text-align: left">
+            {{file}}
+          </td>
+          <td>
+            <a class={{details[0]}}
+            {% if details[0] == "FAILURE" %}
+            	target="_blank" href={{imgDir}}/bit4bit/{{file}}.png
+            {% endif %}
+            >{{details[0]}}</a>
+          </td>
+          {% if details[0] == "FAILURE" %}
+          	<td>{{details[1]}}</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </table>
+        
+        
+      <p id="bold"> Standalone </p>
+        {% if testDetails[case] != [] %}
+      	<table style="width:100%">
+      		<tr>
+      			<th>Output File</th>
+      			{% for var in testHeader %}
+      				<th>{{var}}</th>
+      			{% endfor %}
+      		</tr>
+      		{% for file, details in testDetails[case] %}
+      		<tr>
+      			<td style="text-align: left">{{file}}</td>
+      			{% for key, value in details.iteritems() %}
+      			<td>{{value}}</td>
+      			{% endfor %}
+      		</tr>
+      		{% endfor %}
+      	</table>
+      	{% else %}
+      		<p>No data found</p>
+      	{% endif %}
+ 
+    {% endfor %}
+    <br>
+
+    
+{% include 'footer.html' %}
