@@ -18,8 +18,10 @@ import sys
 import argparse
 import subprocess
 
+from datetime import datetime
+
 # Parse the command line options
-# ------------------------------
+# ==============================
 parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -47,6 +49,8 @@ parser.add_argument('-c', '--cism', default='./cism', type=cism_type,
         help='The location of CISM.')
 parser.add_argument('--cism-branch', default='develop',
         help='The CISM branch to checkout.')
+parser.add_argument('--timing',
+        help='Run tests 10x to get timing information.')
 
 # LIVV options
 def livv_type(path):
@@ -64,15 +68,22 @@ parser.add_argument('-l', '--livv', default='./livv', type=livv_type,
         help='The location of LIVVkit.')
 parser.add_argument('--livv-branch', default='develop',
         help='The LIVVkit branch to checkout.')
+parser.add_argument('--bench-dir', default='./reg_bench', type=normal_existing_dir,
+        help='The benchmark directory for LIVVkit.')
 
 
 # The main script function
-# ------------------------
+# ========================
 def main():
+
+    # get directory *this* script is in
+    install_dir = os.path.dirname(os.path.realpath(__file__))
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d')
     
     # get the latest version of CISM
     print('\nUpdating CISM:')
-    print(  '--------------')
+    print(  '==============')
     subprocess.check_call(['git', 'checkout', args.cism_branch], cwd=args.cism)
     subprocess.check_call(['git', 'pull', '--ff-only'], cwd=args.cism)
     
@@ -82,7 +93,7 @@ def main():
 
     # get the latest version of LIVVkit
     print('\nUpdating LIVVkit:')
-    print(  '-----------------')
+    print(  '=================')
     subprocess.check_call(['git', 'checkout', args.livv_branch], cwd=args.livv)
     subprocess.check_call(['git', 'pull', '--ff-only'], cwd=args.livv)
     
@@ -92,9 +103,16 @@ def main():
 
     # Run BATS
     print('\nRunning BATS:')
-    print(  '-------------')
-    subprocess.check_call(['./build_and_test.py','-h'],cwd=args.cism+os.sep+'tests'+os.sep+'regression')
+    print(  '=============')
+    bats_command = ['./build_and_test.py', 
+                        '-b', install_dir+os.sep+'cism_build', 
+                        '-o', install_dir+os.sep+'reg_test_'+timestamp,
+                    ]
+    
+    if args.timing:
+        bats_command.extend(['--timing', '--sleep', '360'])
 
+    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
 
 
 if __name__=='__main__':
