@@ -15,6 +15,8 @@ CISM with LIVVkit.
 
 import os
 import sys
+import shutil
+import tarfile
 import argparse
 import subprocess
 
@@ -104,9 +106,10 @@ def main():
     # Run BATS
     print('\nRunning BATS:')
     print(  '=============')
+    build_dir = install_dir+os.sep+'cism_build'
     test_dir = install_dir+os.sep+'test_'+timestamp+'_'+cism_hash
     bats_command = ['./build_and_test.py', 
-                        '-b', install_dir+os.sep+'cism_build', 
+                        '-b', build_dir, 
                         '-o', test_dir,
                     ]
     
@@ -136,8 +139,12 @@ def main():
 
 
     # remove build directory
-    
+    shutil.rmtree(build_dir)
+
     # tar reg_test directory
+    with tarfile.open(test_dir+".tar.gz","w:gz") as tar:
+        tar.add(test_dir, arcname=os.path.basename(test_dir))
+
 
     # make/update website
 
