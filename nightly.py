@@ -25,8 +25,8 @@ from datetime import datetime
 parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-def normal_existing_dir(path):
-    path = os.path.normpath(path)
+def abs_existing_dir(path):
+    path = os.path.abspath(path)
     if not os.path.isdir(path):
         print('Error! Directory does not exist: \n    '+path)
         sys.exit(1)
@@ -34,7 +34,7 @@ def normal_existing_dir(path):
 
 # CISM options
 def cism_type(path):
-    path = normal_existing_dir(path)
+    path = abs_existing_dir(path)
     if not os.path.isdir(path+os.sep+'.git'):
         print('Error! CISM directory is not a git repository: \n    '+path)
         print('Cannot determine current CISM commit hash.')
@@ -49,12 +49,12 @@ parser.add_argument('-c', '--cism', default='./cism', type=cism_type,
         help='The location of CISM.')
 parser.add_argument('--cism-branch', default='develop',
         help='The CISM branch to checkout.')
-parser.add_argument('--timing',
+parser.add_argument('--timing', action='store_true',
         help='Run tests 10x to get timing information.')
 
 # LIVV options
 def livv_type(path):
-    path = normal_existing_dir(path)
+    path = abs_existing_dir(path)
     if not os.path.isdir(path+os.sep+'.git'):
         print('Error! LIVVkit directory is not a git repository: \n    '+path)
         print('Cannot determine current LIVVkit commit hash.')
@@ -68,7 +68,7 @@ parser.add_argument('-l', '--livv', default='./livv', type=livv_type,
         help='The location of LIVVkit.')
 parser.add_argument('--livv-branch', default='develop',
         help='The LIVVkit branch to checkout.')
-parser.add_argument('--bench-dir', default='./reg_bench', type=normal_existing_dir,
+parser.add_argument('--bench-dir', default='./reg_bench', type=abs_existing_dir,
         help='The benchmark directory for LIVVkit.')
 
 
@@ -104,9 +104,10 @@ def main():
     # Run BATS
     print('\nRunning BATS:')
     print(  '=============')
+    test_dir = install_dir+os.sep+'test_'+timestamp+'_'+cism_hash
     bats_command = ['./build_and_test.py', 
                         '-b', install_dir+os.sep+'cism_build', 
-                        '-o', install_dir+os.sep+'reg_test_'+timestamp,
+                        '-o', test_dir,
                     ]
     
     if args.timing:
@@ -114,6 +115,31 @@ def main():
 
     subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
 
+
+    # run LIVV
+    print('\nRunning LIVVkit:')
+    print(  '================')
+    out_dir = install_dir+os.sep+'www_'+timestamp+'_'+livv_hash
+    livv_comment = 'Nightly regression test of CISM on '+timestamp \
+                    +', using CISM commit '+cism_hash \
+                    +', and LIVVkit commit '+livv_hash+'.'
+
+    livv_command = ['./livv.py',
+                        '-b', args.bench_dir+os.sep+'linux-gnu',
+                        '-t', test_dir+os.sep+'linux-gnu',
+                        '-o', out_dir,
+                        '-c', livv_comment,
+                        '--performance'
+                    ]
+
+    subprocess.check_call(livv_command,cwd=args.livv)
+
+
+    # remove build directory
+    
+    # tar reg_test directory
+
+    # make/update website
 
 if __name__=='__main__':
     args = parser.parse_args()
