@@ -137,14 +137,13 @@ def main():
 
     subprocess.check_call(livv_command,cwd=args.livv)
 
-
-    # remove build directory
-    shutil.rmtree(build_dir)
-
     # tar reg_test directory
     with tarfile.open(test_dir+".tar.gz","w:gz") as tar:
         tar.add(test_dir, arcname=os.path.basename(test_dir))
 
+    # remove build and reg_test directory
+    shutil.rmtree(build_dir)
+    shutil.rmtree(test_dir)
 
     # make/update website
 
