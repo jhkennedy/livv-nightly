@@ -15,6 +15,9 @@ CISM with LIVVkit.
 
 import os
 import sys
+import glob
+import fnmatch
+import jinja2
 import shutil
 import tarfile
 import argparse
@@ -74,6 +77,43 @@ parser.add_argument('--bench-dir', default='./reg_bench', type=abs_existing_dir,
         help='The benchmark directory for LIVVkit.')
 
 
+# Some useful functions
+# =====================
+def recursive_glob(tree, pattern):
+    matches = []
+    for base, dirs, files in os.walk(tree):
+        goodfiles = fnmatch.filter(files, pattern)
+        matches.extend(os.path.join(base, f) for f in goodfiles)
+    return matches
+
+def filenames_sort_key(fn):
+    fn_timestamp = os.path.basename(fn).split('_')[1]
+    return datetime.strptime(fn_timestamp, '%Y-%m-%d')
+
+
+def sorted_tarballs(look_dir, keep):
+    test_tarballs =recursive_glob(look_dir, 'test_*.tar.gz')
+    web_tarballs = recursive_glob(look_dir, 'www_*.tar.gz')
+    
+    web_dirs = []
+    for wd in web_tarballs:
+        head, tail = os.path.split(wd)
+        web_dirs.append(os.path.join(head, tail.strip('.tar.gz')))
+
+
+    test_tarballs = sorted(test_tarballs, key=filenames_sort_key, reverse=True)
+    web_tarballs = sorted(web_tarballs, key=filenames_sort_key, reverse=True)
+    web_dirs = sorted(web_dirs, key=filenames_sort_key, reverse=True)
+   
+    if len(test_tarballs) > keep:
+        del test_tarballs[keep:]
+        del web_tarballs[keep:]
+        del web_dirs[keep:]
+    #FIXME: This deletes from list, but we really should be deleteing the files too!
+
+    return test_tarballs, web_tarballs, web_dirs
+
+
 # The main script function
 # ========================
 def main():
@@ -123,8 +163,7 @@ def main():
     print('\nRunning LIVVkit:')
     print(  '================')
     out_dir = install_dir+os.sep+'www_'+timestamp+'_'+livv_hash
-    livv_comment = 'Nightly regression test of CISM on '+timestamp \
-                    +', using CISM commit '+cism_hash \
+    livv_comment = 'Nightly regression test of CISM using commit '+cism_hash \
                     +', and LIVVkit commit '+livv_hash+'.'
 
     livv_command = ['./livv.py',
@@ -137,15 +176,30 @@ def main():
 
     subprocess.check_call(livv_command,cwd=args.livv)
 
-    # tar reg_test directory
+    # tar directories
     with tarfile.open(test_dir+".tar.gz","w:gz") as tar:
         tar.add(test_dir, arcname=os.path.basename(test_dir))
+    
+    with tarfile.open(out_dir+".tar.gz","w:gz") as tar:
+        tar.add(out_dir, arcname=os.path.basename(out_dir))
 
     # remove build and reg_test directory
     shutil.rmtree(build_dir)
     shutil.rmtree(test_dir)
 
+
     # make/update website
+    # -------------------
+    test_tarballs, web_tarballs, web_dirs = sorted_tarballs(install_dir, 10)
+
+
+    import pprint
+    print('Test Tarballs:')
+    pprint.pprint(test_tarballs)
+    print('\nWeb Tarballs:')
+    pprint.pprint(web_tarballs)
+    print('\nWeb Dirs:')
+    pprint.pprint(web_dirs)
 
 if __name__=='__main__':
     args = parser.parse_args()
