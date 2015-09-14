@@ -23,18 +23,48 @@ import tarfile
 import argparse
 import subprocess
 
+from distutils import dir_util
 from datetime import datetime
 
+# get directory *this* script is in
+install_dir = os.path.dirname(os.path.realpath(__file__))
+    
 # Parse the command line options
 # ==============================
 parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+def unsigned_int(x):
+    """
+    Small helper function so argparse will understand unsigned integers.
+    """
+    x = int(x)
+    if x < 1:
+        raise argparse.ArgumentTypeError("This argument is an unsigned int type! Should be an integer greater than zero.")
+    return x
+
+def mkdir_p(path):
+    """
+    Make parent directories as needed and no error if existing. Works like `mkdir -p`.
+    """
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
 
 def abs_existing_dir(path):
     path = os.path.abspath(path)
     if not os.path.isdir(path):
         print('Error! Directory does not exist: \n    '+path)
         sys.exit(1)
+    return path
+
+def abs_creation_dir(path):
+    path = os.path.abspath(path)
+    if not os.path.isdir(path):
+        mkdir_p(path)
     return path
 
 # CISM options
@@ -76,6 +106,12 @@ parser.add_argument('--livv-branch', default='develop',
 parser.add_argument('--bench-dir', default='./reg_bench', type=abs_existing_dir,
         help='The benchmark directory for LIVVkit.')
 
+# Nightly options
+parser.add_argument('-k', '--keep', default='10', type=unsigned_int,
+        help='The location of LIVVkit.')
+parser.add_argument('-o', '--nightly-output-dir', default=install_dir+os.sep+'current', type=abs_creation_dir,
+        help='The directory to output the nightly test results summary and all data.')
+
 
 # Some useful functions
 # =====================
@@ -106,10 +142,17 @@ def sorted_tarballs(look_dir, keep):
     web_dirs = sorted(web_dirs, key=filenames_sort_key, reverse=True)
    
     if len(test_tarballs) > keep:
+        remove_files = test_tarballs[keep:]
+        remove_files.extend(web_tarballs[keep:])
+        for rf in remove_files:
+            os.remove(rf)
+
+        for rd in web_dirs[keep:]:
+            shutil.rmtree(rd)
+
         del test_tarballs[keep:]
         del web_tarballs[keep:]
         del web_dirs[keep:]
-    #FIXME: This deletes from list, but we really should be deleteing the files too!
 
     return test_tarballs, web_tarballs, web_dirs
 
@@ -117,12 +160,11 @@ def sorted_tarballs(look_dir, keep):
 # The main script function
 # ========================
 def main():
-
-    # get directory *this* script is in
-    install_dir = os.path.dirname(os.path.realpath(__file__))
-    
     timestamp = datetime.now().strftime('%Y-%m-%d')
     
+    data_dir = abs_creation_dir(args.nightly_output_dir+os.sep+'data')
+
+
     # get the latest version of CISM
     print('\nUpdating CISM:')
     print(  '==============')
@@ -147,7 +189,7 @@ def main():
     print('\nRunning BATS:')
     print(  '=============')
     build_dir = install_dir+os.sep+'cism_build'
-    test_dir = install_dir+os.sep+'test_'+timestamp+'_'+cism_hash
+    test_dir = data_dir+os.sep+'test_'+timestamp+'_'+cism_hash
     bats_command = ['./build_and_test.py', 
                         '-b', build_dir, 
                         '-o', test_dir,
@@ -162,7 +204,7 @@ def main():
     # run LIVV
     print('\nRunning LIVVkit:')
     print(  '================')
-    out_dir = install_dir+os.sep+'www_'+timestamp+'_'+livv_hash
+    out_dir = data_dir+os.sep+'www_'+timestamp+'_'+livv_hash
     livv_comment = 'Nightly regression test of CISM using commit '+cism_hash \
                     +', and LIVVkit commit '+livv_hash+'.'
 
@@ -190,16 +232,24 @@ def main():
 
     # make/update website
     # -------------------
-    test_tarballs, web_tarballs, web_dirs = sorted_tarballs(install_dir, 10)
+    test_tarballs, web_tarballs, web_dirs = sorted_tarballs(data_dir, args.keep)
+    
+    dir_util.copy_tree(abs_existing_dir(args.livv+'/web/imgs'), args.nightly_output_dir+os.sep+'imgs')
+    dir_util.copy_tree(abs_existing_dir(args.livv+'/web/css'), args.nightly_output_dir+os.sep+'css')
+    
+    template_dir = abs_existing_dir(args.livv+'/web/templates')
+    template_loader = jinja2.FileSystemLoader([template_dir, install_dir])
+    template_env = jinja2.Environment(loader=template_loader)
+    template_vars = {'index_dir' : '.',
+                     'css_dir' : 'css',
+                     'img_dir' : 'imgs'}
 
+    template = template_env.get_template('index-template.html')
+    template_output = template.render(template_vars)
 
-    import pprint
-    print('Test Tarballs:')
-    pprint.pprint(test_tarballs)
-    print('\nWeb Tarballs:')
-    pprint.pprint(web_tarballs)
-    print('\nWeb Dirs:')
-    pprint.pprint(web_dirs)
+    with open(args.nightly_output_dir+os.sep+'index.html', 'w') as index:
+        index.write(template_output)
+
 
 if __name__=='__main__':
     args = parser.parse_args()
