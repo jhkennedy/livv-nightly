@@ -31,10 +31,47 @@
 {% include 'components/header.html' %}
 
     <div id="content">
-      hello. 
+        <div class="verification"> 
+            <h2 style="padding-left: 15px;"> Nightly Regression Tests:</h2>
+           
+
+            <table class="summary">
+                <tr>
+                    <th rowspan="2"> Date </th>
+                    <th rowspan="2"> Tests bit-for-bit </th>
+                    <th> LIVVkit website </th>
+                    <th rowspan="2"> LIVVkit tarball </th>
+                    <th> Test tarball </th>
+                    <th> Bench tarball </th>
+                </tr>
+                <tr>
+                    <th> (LIVVkit commit &#35;) </th>
+                    <th> (CISM commit &#35;) </th>
+                    <th> (CISM commit &#35;) </th>
+                </tr>
+                {% for wd in web_dirs %}
+                    <tr>
+                        <td> {{date_list[loop.index0]}} </td>
+                        
+                        {% if b4b[wd][0] == b4b[wd][1] %}
+                            <td class="SUCCESS"> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
+                        {% elif b4b[wd][0] < b4b[wd][1] %}
+                            <td class="FAILURE"> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
+                        {% else %}
+                            <td> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
+                        {% endif %}
+                        
+                        <td> <a class="table_link" href="data/{{wd}}/index.html" target="_blank">{{livv_hash_list[loop.index0]}}</a></td>
+                        <td> <a class="table_link" href="data/{{web_tarballs[loop.index0]}}">www_*.tar.gz</a></td>
+                        <td> <a class="table_link" href="data/{{test_tarballs[loop.index0]}}">test_*.tar.gz</a> ({{test_hash_list[loop.index0]}})</td>
+                        <td> <a class="table_link" href="data/{{bench_tarballs[loop.index0]}}">bench_*.tar.gz</a> ({{bench_hash_list[loop.index0]}})</td>
+                    </tr>
+                {% endfor %}
+            </table>
 
 
-    </div> <!-- id='content' -->
+        </div>
+    </div> 
 </div> <!-- id='page'; from components/header.html -->
 
 {% include 'components/acknowledgments.html' %}

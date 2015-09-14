@@ -16,15 +16,16 @@ CISM with LIVVkit.
 import os
 import sys
 import glob
-import fnmatch
 import jinja2
 import shutil
+import fnmatch
 import tarfile
 import argparse
 import subprocess
 
-from distutils import dir_util
+from bs4 import BeautifulSoup
 from datetime import datetime
+from distutils import dir_util
 
 # get directory *this* script is in
 install_dir = os.path.dirname(os.path.realpath(__file__))
@@ -105,6 +106,8 @@ parser.add_argument('--livv-branch', default='develop',
         help='The LIVVkit branch to checkout.')
 parser.add_argument('--bench-dir', default='./reg_bench', type=abs_existing_dir,
         help='The benchmark directory for LIVVkit.')
+parser.add_argument('--bench-hash', default='unknown',
+        help='The commit hash of CISM used to generate the benchmark data.')
 
 # Nightly options
 parser.add_argument('-k', '--keep', default='10', type=unsigned_int,
@@ -129,6 +132,7 @@ def filenames_sort_key(fn):
 
 def sorted_tarballs(look_dir, keep):
     test_tarballs =recursive_glob(look_dir, 'test_*.tar.gz')
+    bench_tarballs =recursive_glob(look_dir, 'bench_*.tar.gz')
     web_tarballs = recursive_glob(look_dir, 'www_*.tar.gz')
     
     web_dirs = []
@@ -138,11 +142,13 @@ def sorted_tarballs(look_dir, keep):
 
 
     test_tarballs = sorted(test_tarballs, key=filenames_sort_key, reverse=True)
+    bench_tarballs = sorted(bench_tarballs, key=filenames_sort_key, reverse=True)
     web_tarballs = sorted(web_tarballs, key=filenames_sort_key, reverse=True)
     web_dirs = sorted(web_dirs, key=filenames_sort_key, reverse=True)
    
     if len(test_tarballs) > keep:
         remove_files = test_tarballs[keep:]
+        remove_files.extend(bench_tarballs[keep:])
         remove_files.extend(web_tarballs[keep:])
         for rf in remove_files:
             os.remove(rf)
@@ -151,10 +157,12 @@ def sorted_tarballs(look_dir, keep):
             shutil.rmtree(rd)
 
         del test_tarballs[keep:]
+        del bench_tarballs[keep:]
         del web_tarballs[keep:]
         del web_dirs[keep:]
 
-    return test_tarballs, web_tarballs, web_dirs
+
+    return test_tarballs, bench_tarballs, web_tarballs, web_dirs
 
 
 # The main script function
@@ -222,6 +230,10 @@ def main():
     with tarfile.open(test_dir+".tar.gz","w:gz") as tar:
         tar.add(test_dir, arcname=os.path.basename(test_dir))
     
+    bench_name = data_dir+os.sep+'bench_'+timestamp+'_'+args.bench_hash
+    with tarfile.open(bench_name+".tar.gz","w:gz") as tar:
+        tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
+    
     with tarfile.open(out_dir+".tar.gz","w:gz") as tar:
         tar.add(out_dir, arcname=os.path.basename(out_dir))
 
@@ -232,17 +244,58 @@ def main():
 
     # make/update website
     # -------------------
-    test_tarballs, web_tarballs, web_dirs = sorted_tarballs(data_dir, args.keep)
+    test_tarballs, bench_tarballs, web_tarballs, web_dirs = sorted_tarballs(data_dir, args.keep)
+    date_list = [] 
+    test_hash_list = []
+    livv_hash_list = []
+    bench_hash_list = []
+    for ii in range(len(test_tarballs)):
+        tb_split = os.path.basename(test_tarballs[ii]).split('_')
+        date_list.append(tb_split[1])
+        test_hash_list.append(tb_split[2].strip('.tar.gz'))
+        livv_hash_list.append(os.path.basename(web_tarballs[ii]).split('_')[2].strip('.tar.gz'))
+        bench_hash_list.append(os.path.basename(bench_tarballs[ii]).split('_')[2].strip('.tar.gz'))
     
+    # get data from Previous LIVVkit runs:
+    b4b = {}
+    for wd in web_dirs:
+        wd_html = wd+os.sep+'index.html'
+        soup = BeautifulSoup(open(wd_html))
+        # The b4b-ness for all tests. 
+        v_rows = soup.body.find('div', class_='verification').findAll('tr')
+        v_rows_good = [vr for vr in v_rows if vr and 'table_link' not in str(vr)]
+        b4bs = [vrg.find_all('td')[-1].text for vrg in v_rows_good if vrg.find_all('td')]
+        
+        b4b_tests = 0
+        b4b_total = 0
+        for bb in b4bs:
+            bb_num, bb_tot = bb.split('/')
+            b4b_tests += int(bb_num)
+            b4b_total += int(bb_tot)
+        b4b[os.path.basename(wd)] = (str(b4b_tests), str(b4b_total))
+            
+
+
+    # start generating website
     dir_util.copy_tree(abs_existing_dir(args.livv+'/web/imgs'), args.nightly_output_dir+os.sep+'imgs')
     dir_util.copy_tree(abs_existing_dir(args.livv+'/web/css'), args.nightly_output_dir+os.sep+'css')
-    
+   
     template_dir = abs_existing_dir(args.livv+'/web/templates')
     template_loader = jinja2.FileSystemLoader([template_dir, install_dir])
     template_env = jinja2.Environment(loader=template_loader)
     template_vars = {'index_dir' : '.',
                      'css_dir' : 'css',
-                     'img_dir' : 'imgs'}
+                     'img_dir' : 'imgs',
+                     'date_list' : date_list,
+                     'b4b' : b4b,
+                     'test_hash_list' : test_hash_list, 
+                     'bench_hash_list' : bench_hash_list, 
+                     'livv_hash_list' : livv_hash_list, 
+                     'web_dirs' : map(os.path.basename, web_dirs),
+                     'test_tarballs' : map(os.path.basename, test_tarballs),
+                     'bench_tarballs' : map(os.path.basename, bench_tarballs),
+                     'web_tarballs' : map(os.path.basename, web_tarballs),
+                     }
 
     template = template_env.get_template('index-template.html')
     template_output = template.render(template_vars)
