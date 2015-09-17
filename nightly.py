@@ -111,7 +111,7 @@ parser.add_argument('--bench-hash', default='unknown',
 
 # Nightly options
 parser.add_argument('-k', '--keep', default='10', type=unsigned_int,
-        help='The location of LIVVkit.')
+        help='Number of previous nightly runs to keep.')
 parser.add_argument('-o', '--nightly-output-dir', default=install_dir+os.sep+'current', type=abs_creation_dir,
         help='The directory to output the nightly test results summary and all data.')
 
@@ -227,14 +227,14 @@ def main():
     subprocess.check_call(livv_command,cwd=args.livv)
 
     # tar directories
-    with tarfile.open(test_dir+".tar.gz","w:gz") as tar:
+    with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
         tar.add(test_dir, arcname=os.path.basename(test_dir))
     
     bench_name = data_dir+os.sep+'bench_'+timestamp+'_'+args.bench_hash
-    with tarfile.open(bench_name+".tar.gz","w:gz") as tar:
+    with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
         tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
     
-    with tarfile.open(out_dir+".tar.gz","w:gz") as tar:
+    with tarfile.open(out_dir+".tar.gz","w:gz", dereference=True) as tar:
         tar.add(out_dir, arcname=os.path.basename(out_dir))
 
     # remove build and reg_test directory

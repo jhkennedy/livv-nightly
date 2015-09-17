@@ -1,5 +1,12 @@
 #### joe made this: https://goel.io/joe
 
+# The CISM and LIVV directories
+cism/
+livv/
+
+# The output website and data
+current/
+
 #####=== Vim ===#####
 [._]*.s[a-w][a-z]
 [._]s[a-w][a-z]
