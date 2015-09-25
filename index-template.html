@@ -33,7 +33,6 @@
     <div id="content">
         <div class="verification"> 
             <h2 style="padding-left: 15px;"> Nightly Regression Tests:</h2>
-           
 
             <table class="summary">
                 <tr>
@@ -49,26 +48,67 @@
                     <th> (CISM commit &#35;) </th>
                     <th> (CISM commit &#35;) </th>
                 </tr>
-                {% for wd in web_dirs %}
+                {% for ndl in nights_date_list %}
                     <tr>
-                        <td> {{date_list[loop.index0]}} </td>
+                        <td> {{ndl}} </td>
                         
-                        {% if b4b[wd][0] == b4b[wd][1] %}
-                            <td class="SUCCESS"> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
-                        {% elif b4b[wd][0] < b4b[wd][1] %}
-                            <td class="FAILURE"> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
+                        {% if nights_b4b[ndl][0] == nights_b4b[ndl][1] %}
+                            <td class="SUCCESS"> {{nights_b4b[ndl][0]}}/{{nights_b4b[ndl][1]}} </td>
+                        {% elif nights_b4b[ndl][0] < nights_b4b[ndl][1] %}
+                            <td class="FAILURE"> {{nights_b4b[ndl][0]}}/{{nights_b4b[ndl][1]}} </td>
                         {% else %}
-                            <td> {{b4b[wd][0]}}/{{b4b[wd][1]}} </td>
+                            <td> {{nights_b4b[ndl][0]}}/{{nights_b4b[ndl][1]}} </td>
                         {% endif %}
                         
-                        <td> <a class="table_link" href="data/{{wd}}/index.html" target="_blank">{{livv_hash_list[loop.index0]}}</a></td>
-                        <td> <a class="table_link" href="data/{{web_tarballs[loop.index0]}}">www_*.tar.gz</a></td>
-                        <td> <a class="table_link" href="data/{{test_tarballs[loop.index0]}}">test_*.tar.gz</a> ({{test_hash_list[loop.index0]}})</td>
-                        <td> <a class="table_link" href="data/{{bench_tarballs[loop.index0]}}">bench_*.tar.gz</a> ({{bench_hash_list[loop.index0]}})</td>
+                        <td> <a class="table_link" href="data/{{nights_details[ndl][0]}}/index.html" target="_blank">
+                                {{nights_livv_hash_list[loop.index0]}}</a></td>
+                        <td> <a class="table_link" href="data/{{nights_details[ndl][1]}}">www_*.tar.gz</a></td>
+                        <td> <a class="table_link" href="data/{{nights_details[ndl][2]}}">
+                                test_*.tar.gz</a> ({{nights_test_hash_list[loop.index0]}})</td>
+                        <td> <a class="table_link" href="data/{{nights_details[ndl][3]}}">
+                                bench_*.tar.gz</a> ({{nights_bench_hash_list[loop.index0]}})</td>
                     </tr>
                 {% endfor %}
             </table>
 
+            <h2 style="padding-left: 15px;"> Weekly Regression Tests:</h2>
+
+            <table class="summary">
+                <tr>
+                    <th rowspan="2"> Date </th>
+                    <th rowspan="2"> Tests bit-for-bit </th>
+                    <th> LIVVkit website </th>
+                    <th rowspan="2"> LIVVkit tarball </th>
+                    <th> Test tarball </th>
+                    <th> Bench tarball </th>
+                </tr>
+                <tr>
+                    <th> (LIVVkit commit &#35;) </th>
+                    <th> (CISM commit &#35;) </th>
+                    <th> (CISM commit &#35;) </th>
+                </tr>
+                {% for wdl in weeks_date_list %}
+                    <tr>
+                        <td> {{wdl}} </td>
+                        
+                        {% if weeks_b4b[wdl][0] == weeks_b4b[wdl][1] %}
+                            <td class="SUCCESS"> {{weeks_b4b[wdl][0]}}/{{weeks_b4b[wdl][1]}} </td>
+                        {% elif weeks_b4b[wdl][0] < weeks_b4b[wdl][1] %}
+                            <td class="FAILURE"> {{weeks_b4b[wdl][0]}}/{{weeks_b4b[wdl][1]}} </td>
+                        {% else %}
+                            <td> {{weeks_b4b[wdl][0]}}/{{weeks_b4b[wdl][1]}} </td>
+                        {% endif %}
+                        
+                        <td> <a class="table_link" href="data/{{weeks_details[wdl][0]}}/index.html" target="_blank">
+                                {{weeks_livv_hash_list[loop.index0]}}</a></td>
+                        <td> <a class="table_link" href="data/{{weeks_details[wdl][1]}}">www_*.tar.gz</a></td>
+                        <td> <a class="table_link" href="data/{{weeks_details[wdl][2]}}">
+                                test_*.tar.gz</a> ({{weeks_test_hash_list[loop.index0]}})</td>
+                        <td> <a class="table_link" href="data/{{weeks_details[wdl][3]}}">
+                                bench_*.tar.gz</a> ({{weeks_bench_hash_list[loop.index0]}})</td>
+                    </tr>
+                {% endfor %}
+            </table>
 
         </div>
     </div> 

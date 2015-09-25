@@ -20,11 +20,11 @@ import jinja2
 import shutil
 import fnmatch
 import tarfile
+import datetime
 import argparse
 import subprocess
 
 from bs4 import BeautifulSoup
-from datetime import datetime
 from distutils import dir_util
 
 # get directory *this* script is in
@@ -110,8 +110,10 @@ parser.add_argument('--bench-hash', default='unknown',
         help='The commit hash of CISM used to generate the benchmark data.')
 
 # Nightly options
-parser.add_argument('-k', '--keep', default='10', type=unsigned_int,
+parser.add_argument('--keep-nights', default='4', type=unsigned_int,
         help='Number of previous nightly runs to keep.')
+parser.add_argument('--keep-weeks', default='8', type=unsigned_int,
+        help='Number of sunday runs to keep (will be kept in addition to the nightly runs).')
 parser.add_argument('-o', '--nightly-output-dir', default=install_dir+os.sep+'current', type=abs_creation_dir,
         help='The directory to output the nightly test results summary and all data.')
 
@@ -126,11 +128,13 @@ def recursive_glob(tree, pattern):
     return matches
 
 def filenames_sort_key(fn):
-    fn_timestamp = os.path.basename(fn).split('_')[1]
-    return datetime.strptime(fn_timestamp, '%Y-%m-%d')
+    fn_time_stamp = os.path.basename(fn).split('_')[1]
+    return datetime.datetime.strptime(fn_time_stamp, '%Y-%m-%d')
 
+def timestamp_sort_key(ts):
+    return datetime.datetime.strptime(ts, '%Y-%m-%d')
 
-def sorted_tarballs(look_dir, keep):
+def sorted_tarballs(look_dir):
     test_tarballs =recursive_glob(look_dir, 'test_*.tar.gz')
     bench_tarballs =recursive_glob(look_dir, 'bench_*.tar.gz')
     web_tarballs = recursive_glob(look_dir, 'www_*.tar.gz')
@@ -140,35 +144,51 @@ def sorted_tarballs(look_dir, keep):
         head, tail = os.path.split(wd)
         web_dirs.append(os.path.join(head, tail.strip('.tar.gz')))
 
-
     test_tarballs = sorted(test_tarballs, key=filenames_sort_key, reverse=True)
     bench_tarballs = sorted(bench_tarballs, key=filenames_sort_key, reverse=True)
     web_tarballs = sorted(web_tarballs, key=filenames_sort_key, reverse=True)
     web_dirs = sorted(web_dirs, key=filenames_sort_key, reverse=True)
-   
-    if len(test_tarballs) > keep:
-        remove_files = test_tarballs[keep:]
-        remove_files.extend(bench_tarballs[keep:])
-        remove_files.extend(web_tarballs[keep:])
-        for rf in remove_files:
-            os.remove(rf)
-
-        for rd in web_dirs[keep:]:
-            shutil.rmtree(rd)
-
-        del test_tarballs[keep:]
-        del bench_tarballs[keep:]
-        del web_tarballs[keep:]
-        del web_dirs[keep:]
-
 
     return test_tarballs, bench_tarballs, web_tarballs, web_dirs
+
+
+def choose_tarballs(look_dir, args):
+    test_tarballs, bench_tarballs, web_tarballs, web_dirs = sorted_tarballs(look_dir)
+   
+    details = {}
+    for idx, wd in enumerate(web_dirs):
+        wd_time_stamp = os.path.basename(wd).split('_')[1]
+        matching_test = os.path.basename( next((x for x in test_tarballs if wd_time_stamp in x),'MISSING') )
+        matching_bench = os.path.basename( next((x for x in bench_tarballs if wd_time_stamp in x),'MISSING') )
+        details[wd_time_stamp] = [os.path.basename(wd), os.path.basename(web_tarballs[idx]), matching_test, matching_bench]
+
+    nights_min_time = args.start_time-datetime.timedelta(days=args.keep_nights)
+    weeks_min_time = args.start_time-datetime.timedelta(days=args.keep_weeks*7)
+    
+    nights_details = {key:val for (key,val) in details.iteritems() if datetime.datetime.strptime(key, '%Y-%m-%d') >= nights_min_time }
+    weeks_details = {key:val for (key,val) in details.iteritems() if (datetime.datetime.strptime(key, '%Y-%m-%d') >= weeks_min_time) and
+                                                                     (datetime.datetime.strptime(key, '%Y-%m-%d').weekday() == 6) }
+    
+    nights_delete = {key:val for (key,val) in details.iteritems() if (datetime.datetime.strptime(key, '%Y-%m-%d') < nights_min_time) and
+                                                                     (datetime.datetime.strptime(key, '%Y-%m-%d').weekday() != 6) }
+    nights_delete.update( {key:val for (key,val) in details.iteritems() if datetime.datetime.strptime(key, '%Y-%m-%d') < weeks_min_time } )
+    
+    
+    for key, val in nights_delete.iteritems():
+        shutil.rmtree(os.path.join(look_dir, val[0]))
+        for f in val[1:]:
+            os.remove(os.path.join(look_dir, f))
+
+    return nights_details, weeks_details
+
+
 
 
 # The main script function
 # ========================
 def main():
-    timestamp = datetime.now().strftime('%Y-%m-%d')
+    args.start_time = datetime.datetime.now()
+    time_stamp = args.start_time.strftime('%Y-%m-%d')
     
     data_dir = abs_creation_dir(args.nightly_output_dir+os.sep+'data')
 
@@ -197,7 +217,7 @@ def main():
     print('\nRunning BATS:')
     print(  '=============')
     build_dir = install_dir+os.sep+'cism_build'
-    test_dir = data_dir+os.sep+'test_'+timestamp+'_'+cism_hash
+    test_dir = data_dir+os.sep+'test_'+time_stamp+'_'+cism_hash
     bats_command = ['./build_and_test.py', 
                         '-b', build_dir, 
                         '-o', test_dir,
@@ -206,13 +226,13 @@ def main():
     if args.timing:
         bats_command.extend(['--timing', '--sleep', '360'])
 
-    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
+#    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
 
 
     # run LIVV
     print('\nRunning LIVVkit:')
     print(  '================')
-    out_dir = data_dir+os.sep+'www_'+timestamp+'_'+livv_hash
+    out_dir = data_dir+os.sep+'www_'+time_stamp+'_'+livv_hash
     livv_comment = 'Nightly regression test of CISM using commit '+cism_hash \
                     +', and LIVVkit commit '+livv_hash+'.'
 
@@ -224,42 +244,41 @@ def main():
                         '--performance'
                     ]
 
-    subprocess.check_call(livv_command,cwd=args.livv)
-
-    # tar directories
-    with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
-        tar.add(test_dir, arcname=os.path.basename(test_dir))
-    
-    bench_name = data_dir+os.sep+'bench_'+timestamp+'_'+args.bench_hash
-    with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
-        tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
-    
-    with tarfile.open(out_dir+".tar.gz","w:gz", dereference=True) as tar:
-        tar.add(out_dir, arcname=os.path.basename(out_dir))
-
-    # remove build and reg_test directory
-    shutil.rmtree(build_dir)
-    shutil.rmtree(test_dir)
+#    subprocess.check_call(livv_command,cwd=args.livv)
+#
+#    # tar directories
+#    with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
+#        tar.add(test_dir, arcname=os.path.basename(test_dir))
+#    
+#    bench_name = data_dir+os.sep+'bench_'+time_stamp+'_'+args.bench_hash
+#    with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
+#        tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
+#    
+#    with tarfile.open(out_dir+".tar.gz","w:gz", dereference=True) as tar:
+#        tar.add(out_dir, arcname=os.path.basename(out_dir))
+#
+#    # remove build and reg_test directory
+#    shutil.rmtree(build_dir)
+#    shutil.rmtree(test_dir)
 
 
     # make/update website
     # -------------------
-    test_tarballs, bench_tarballs, web_tarballs, web_dirs = sorted_tarballs(data_dir, args.keep)
-    date_list = [] 
-    test_hash_list = []
-    livv_hash_list = []
-    bench_hash_list = []
-    for ii in range(len(test_tarballs)):
-        tb_split = os.path.basename(test_tarballs[ii]).split('_')
-        date_list.append(tb_split[1])
-        test_hash_list.append(tb_split[2].strip('.tar.gz'))
-        livv_hash_list.append(os.path.basename(web_tarballs[ii]).split('_')[2].strip('.tar.gz'))
-        bench_hash_list.append(os.path.basename(bench_tarballs[ii]).split('_')[2].strip('.tar.gz'))
+    nights_details, weeks_details = choose_tarballs(data_dir, args)
+
+
+    nights_date_list = sorted(nights_details.keys(), key=timestamp_sort_key, reverse=True) 
+    nights_livv_hash_list = []
+    nights_test_hash_list = []
+    nights_bench_hash_list = []
+    nights_b4b = {}
+    for ndl in nights_date_list:
+        nights_livv_hash_list.append(nights_details[ndl][1].split('_')[2].strip('.tar.gz'))
+        nights_test_hash_list.append(nights_details[ndl][2].split('_')[2].strip('.tar.gz'))
+        nights_bench_hash_list.append(nights_details[ndl][3].split('_')[2].strip('.tar.gz'))
     
-    # get data from Previous LIVVkit runs:
-    b4b = {}
-    for wd in web_dirs:
-        wd_html = wd+os.sep+'index.html'
+        # get data from Previous LIVVkit runs:
+        wd_html = os.path.join(data_dir, nights_details[ndl][0], 'index.html')
         soup = BeautifulSoup(open(wd_html))
         # The b4b-ness for all tests. 
         v_rows = soup.body.find('div', class_='verification').findAll('tr')
@@ -272,8 +291,33 @@ def main():
             bb_num, bb_tot = bb.split('/')
             b4b_tests += int(bb_num)
             b4b_total += int(bb_tot)
-        b4b[os.path.basename(wd)] = (str(b4b_tests), str(b4b_total))
+        nights_b4b[ndl] = (str(b4b_tests), str(b4b_total))
             
+    weeks_date_list = sorted(weeks_details.keys(), key=timestamp_sort_key, reverse=True) 
+    weeks_livv_hash_list = []
+    weeks_test_hash_list = []
+    weeks_bench_hash_list = []
+    weeks_b4b = {}
+    for wdl in weeks_date_list:
+        weeks_livv_hash_list.append(weeks_details[wdl][1].split('_')[2].strip('.tar.gz'))
+        weeks_test_hash_list.append(weeks_details[wdl][2].split('_')[2].strip('.tar.gz'))
+        weeks_bench_hash_list.append(weeks_details[wdl][3].split('_')[2].strip('.tar.gz'))
+    
+        # get data from Previous LIVVkit runs:
+        wd_html = os.path.join(data_dir, weeks_details[wdl][0], 'index.html')
+        soup = BeautifulSoup(open(wd_html))
+        # The b4b-ness for all tests. 
+        v_rows = soup.body.find('div', class_='verification').findAll('tr')
+        v_rows_good = [vr for vr in v_rows if vr and 'table_link' not in str(vr)]
+        b4bs = [vrg.find_all('td')[-1].text for vrg in v_rows_good if vrg.find_all('td')]
+        
+        b4b_tests = 0
+        b4b_total = 0
+        for bb in b4bs:
+            bb_num, bb_tot = bb.split('/')
+            b4b_tests += int(bb_num)
+            b4b_total += int(bb_tot)
+        weeks_b4b[wdl] = (str(b4b_tests), str(b4b_total))
 
 
     # start generating website
@@ -286,15 +330,18 @@ def main():
     template_vars = {'index_dir' : '.',
                      'css_dir' : 'css',
                      'img_dir' : 'imgs',
-                     'date_list' : date_list,
-                     'b4b' : b4b,
-                     'test_hash_list' : test_hash_list, 
-                     'bench_hash_list' : bench_hash_list, 
-                     'livv_hash_list' : livv_hash_list, 
-                     'web_dirs' : map(os.path.basename, web_dirs),
-                     'test_tarballs' : map(os.path.basename, test_tarballs),
-                     'bench_tarballs' : map(os.path.basename, bench_tarballs),
-                     'web_tarballs' : map(os.path.basename, web_tarballs),
+                     'nights_date_list' : nights_date_list,
+                     'nights_details' : nights_details,
+                     'nights_b4b' : nights_b4b,
+                     'nights_test_hash_list' : nights_test_hash_list, 
+                     'nights_bench_hash_list' : nights_bench_hash_list, 
+                     'nights_livv_hash_list' : nights_livv_hash_list, 
+                     'weeks_date_list' : weeks_date_list,
+                     'weeks_details' : weeks_details,
+                     'weeks_b4b' : weeks_b4b,
+                     'weeks_test_hash_list' : weeks_test_hash_list, 
+                     'weeks_bench_hash_list' : weeks_bench_hash_list, 
+                     'weeks_livv_hash_list' : weeks_livv_hash_list, 
                      }
 
     template = template_env.get_template('index-template.html')
