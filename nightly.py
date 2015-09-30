@@ -226,7 +226,7 @@ def main():
     if args.timing:
         bats_command.extend(['--timing', '--sleep', '360'])
 
-#    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
+    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
 
 
     # run LIVV
@@ -243,23 +243,23 @@ def main():
                         '-c', livv_comment,
                         '--performance'
                     ]
+    
+    subprocess.check_call(livv_command,cwd=args.livv)
 
-#    subprocess.check_call(livv_command,cwd=args.livv)
-#
-#    # tar directories
-#    with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
-#        tar.add(test_dir, arcname=os.path.basename(test_dir))
-#    
-#    bench_name = data_dir+os.sep+'bench_'+time_stamp+'_'+args.bench_hash
-#    with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
-#        tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
-#    
-#    with tarfile.open(out_dir+".tar.gz","w:gz", dereference=True) as tar:
-#        tar.add(out_dir, arcname=os.path.basename(out_dir))
-#
-#    # remove build and reg_test directory
-#    shutil.rmtree(build_dir)
-#    shutil.rmtree(test_dir)
+    # tar directories
+    with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
+        tar.add(test_dir, arcname=os.path.basename(test_dir))
+    
+    bench_name = data_dir+os.sep+'bench_'+time_stamp+'_'+args.bench_hash
+    with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
+        tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
+    
+    with tarfile.open(out_dir+".tar.gz","w:gz", dereference=True) as tar:
+        tar.add(out_dir, arcname=os.path.basename(out_dir))
+
+    # remove build and reg_test directory
+    shutil.rmtree(build_dir)
+    shutil.rmtree(test_dir)
 
 
     # make/update website
