@@ -16,6 +16,8 @@ CISM with LIVVkit.
 import os
 import sys
 import glob
+import json
+import numpy
 import jinja2
 import shutil
 import fnmatch
@@ -24,7 +26,6 @@ import datetime
 import argparse
 import subprocess
 
-from bs4 import BeautifulSoup
 from distutils import dir_util
 
 # get directory *this* script is in
@@ -95,12 +96,12 @@ def livv_type(path):
         print('Error! LIVVkit directory is not a git repository: \n    '+path)
         print('Cannot determine current LIVVkit commit hash.')
         sys.exit(1)
-    if not (os.path.isfile(path+os.sep+'livv.py')):
+    if not (os.path.isfile(path+os.sep+'livv')):
         print('Error! No livv.py script found in LIVVkit directory: \n    '+path)
         sys.exit(1)
     return path
 
-parser.add_argument('-l', '--livv', default='./livv', type=livv_type,
+parser.add_argument('-l', '--livv', default='./LIVVkit', type=livv_type,
         help='The location of LIVVkit.')
 parser.add_argument('--livv-branch', default='develop',
         help='The LIVVkit branch to checkout.')
@@ -218,7 +219,9 @@ def main():
     print(  '=============')
     build_dir = install_dir+os.sep+'cism_build'
     test_dir = data_dir+os.sep+'test_'+time_stamp+'_'+cism_hash
-    bats_command = ['./build_and_test.py', 
+    bats_command = ['source deactivate;',
+                    'source activate BATS;',
+                    './build_and_test.py', 
                         '-b', build_dir, 
                         '-o', test_dir,
                     ]
@@ -226,7 +229,8 @@ def main():
     if args.timing:
         bats_command.extend(['--timing', '--sleep', '360'])
 
-    subprocess.check_call(bats_command,cwd=args.cism+os.sep+'tests'+os.sep+'regression')
+    subprocess.check_call(' '.join(bats_command), cwd=args.cism+os.sep+'tests'+os.sep+'regression', 
+            shell=True, executable='/bin/bash')
 
 
     # run LIVV
@@ -236,15 +240,16 @@ def main():
     livv_comment = 'Nightly regression test of CISM using commit '+cism_hash \
                     +', and LIVVkit commit '+livv_hash+'.'
 
-    livv_command = ['./livv.py',
-                        '-b', args.bench_dir+os.sep+'linux-gnu',
-                        '-t', test_dir+os.sep+'linux-gnu',
-                        '-o', out_dir,
-                        '-c', livv_comment,
-                        '--performance'
+    livv_command = ['source deactivate;',
+                    'source activate LIVVkit;',
+                    './livv',
+                        '-v', os.path.join(test_dir, 'linux-gnu', 'CISM-glissade'), args.bench_dir, 
+                        '-o', out_dir
                     ]
-    
-    subprocess.check_call(livv_command,cwd=args.livv)
+                    #    '-c', livv_comment,
+
+    subprocess.check_call(' '.join(livv_command), cwd=args.livv, 
+            shell=True, executable='/bin/bash')
 
     # tar directories
     with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
@@ -278,21 +283,20 @@ def main():
         nights_bench_hash_list.append(nights_details[ndl][3].split('_')[2].strip('.tar.gz'))
     
         # get data from Previous LIVVkit runs:
-        wd_html = os.path.join(data_dir, nights_details[ndl][0], 'index.html')
-        soup = BeautifulSoup(open(wd_html))
-        # The b4b-ness for all tests. 
-        v_rows = soup.body.find('div', class_='verification').findAll('tr')
-        v_rows_good = [vr for vr in v_rows if vr and 'table_link' not in str(vr)]
-        b4bs = [vrg.find_all('td')[-1].text for vrg in v_rows_good if vrg.find_all('td')]
+        night_data = {}
+        with open(os.path.join(data_dir, nights_details[ndl][0], 'index.json')) as nd:
+            night_data = json.load(nd)
         
-        b4b_tests = 0
-        b4b_total = 0
-        for bb in b4bs:
-            bb_num, bb_tot = bb.split('/')
-            b4b_tests += int(bb_num)
-            b4b_total += int(bb_tot)
-        nights_b4b[ndl] = (str(b4b_tests), str(b4b_total))
-            
+        # The b4b-ness for all tests. 
+        b4b_details = numpy.array([0, 0])
+        for element in night_data['Data']['Elements']:
+            if element['Title'] == 'Verification':
+                for test in element['Data'].values():
+                    for scale in test.values():
+                        b4b_details += numpy.array(scale['Bit for Bit'])
+
+        nights_b4b[ndl] = (str(b4b_details[0]), str(b4b_details[1]))
+
     weeks_date_list = sorted(weeks_details.keys(), key=timestamp_sort_key, reverse=True) 
     weeks_livv_hash_list = []
     weeks_test_hash_list = []
@@ -304,27 +308,26 @@ def main():
         weeks_bench_hash_list.append(weeks_details[wdl][3].split('_')[2].strip('.tar.gz'))
     
         # get data from Previous LIVVkit runs:
-        wd_html = os.path.join(data_dir, weeks_details[wdl][0], 'index.html')
-        soup = BeautifulSoup(open(wd_html))
-        # The b4b-ness for all tests. 
-        v_rows = soup.body.find('div', class_='verification').findAll('tr')
-        v_rows_good = [vr for vr in v_rows if vr and 'table_link' not in str(vr)]
-        b4bs = [vrg.find_all('td')[-1].text for vrg in v_rows_good if vrg.find_all('td')]
+        weeks_data = {}
+        with open(os.path.join(data_dir, weeks_details[ndl][0], 'index.json')) as wd:
+            weeks_data = json.load(wd)
         
-        b4b_tests = 0
-        b4b_total = 0
-        for bb in b4bs:
-            bb_num, bb_tot = bb.split('/')
-            b4b_tests += int(bb_num)
-            b4b_total += int(bb_tot)
-        weeks_b4b[wdl] = (str(b4b_tests), str(b4b_total))
+        # The b4b-ness for all tests. 
+        b4b_details = numpy.array([0, 0])
+        for element in weeks_data['Data']['Elements']:
+            if element['Title'] == 'Verification':
+                for test in element['Data'].values():
+                    for scale in test.values():
+                        b4b_details += numpy.array(scale['Bit for Bit'])
+
+        weeks_b4b[ndl] = (str(b4b_details[0]), str(b4b_details[1]))
 
 
     # start generating website
-    dir_util.copy_tree(abs_existing_dir(args.livv+'/web/imgs'), args.nightly_output_dir+os.sep+'imgs')
-    dir_util.copy_tree(abs_existing_dir(args.livv+'/web/css'), args.nightly_output_dir+os.sep+'css')
+    dir_util.copy_tree(abs_existing_dir(os.path.join('web','imgs')), args.nightly_output_dir+os.sep+'imgs')
+    dir_util.copy_tree(abs_existing_dir(os.path.join('web','css')), args.nightly_output_dir+os.sep+'css')
    
-    template_dir = abs_existing_dir(args.livv+'/web/templates')
+    template_dir = abs_existing_dir(os.path.join('web','templates'))
     template_loader = jinja2.FileSystemLoader([template_dir, install_dir])
     template_env = jinja2.Environment(loader=template_loader)
     template_vars = {'index_dir' : '.',
@@ -349,7 +352,6 @@ def main():
 
     with open(args.nightly_output_dir+os.sep+'index.html', 'w') as index:
         index.write(template_output)
-
 
 if __name__=='__main__':
     args = parser.parse_args()

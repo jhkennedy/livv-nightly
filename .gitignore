@@ -2,7 +2,8 @@
 
 # The CISM and LIVV directories
 cism/
-livv/
+LIVVkit/
+cism_build/
 
 # The output website and data
 current/
