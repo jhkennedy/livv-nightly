@@ -72,11 +72,11 @@ def abs_creation_dir(path):
 # CISM options
 def cism_type(path):
     path = abs_existing_dir(path)
-    if not os.path.isdir(path+os.sep+'.git'):
+    if not os.path.isdir(os.path.join(path,'.git')):
         print('Error! CISM directory is not a git repository: \n    '+path)
         print('Cannot determine current CISM commit hash.')
         sys.exit(1)
-    if not os.path.isdir(path+os.sep+'cism_driver'):
+    if not os.path.isdir(os.path.join(path,'cism_driver')):
         print('Error! CISM directory does not contain a cism_driver subdirectory: \n    '+path)
         print('Cannot build CISM.')
         sys.exit(1)
@@ -92,11 +92,11 @@ parser.add_argument('--timing', action='store_true',
 # LIVV options
 def livv_type(path):
     path = abs_existing_dir(path)
-    if not os.path.isdir(path+os.sep+'.git'):
+    if not os.path.isdir(os.path.join(path,'.git')):
         print('Error! LIVVkit directory is not a git repository: \n    '+path)
         print('Cannot determine current LIVVkit commit hash.')
         sys.exit(1)
-    if not (os.path.isfile(path+os.sep+'livv')):
+    if not os.path.isfile(os.path.join(path,'livv')):
         print('Error! No livv.py script found in LIVVkit directory: \n    '+path)
         sys.exit(1)
     return path
@@ -115,7 +115,7 @@ parser.add_argument('--keep-nights', default='4', type=unsigned_int,
         help='Number of previous nightly runs to keep.')
 parser.add_argument('--keep-weeks', default='8', type=unsigned_int,
         help='Number of sunday runs to keep (will be kept in addition to the nightly runs).')
-parser.add_argument('-o', '--nightly-output-dir', default=install_dir+os.sep+'current', type=abs_creation_dir,
+parser.add_argument('-o', '--nightly-output-dir', default=os.path.join(install_dir,'current'), type=abs_creation_dir,
         help='The directory to output the nightly test results summary and all data.')
 
 
@@ -191,7 +191,7 @@ def main():
     args.start_time = datetime.datetime.now()
     time_stamp = args.start_time.strftime('%Y-%m-%d')
     
-    data_dir = abs_creation_dir(args.nightly_output_dir+os.sep+'data')
+    data_dir = abs_creation_dir(os.path.join(args.nightly_output_dir,'data'))
 
 
     # get the latest version of CISM
@@ -217,8 +217,8 @@ def main():
     # Run BATS
     print('\nRunning BATS:')
     print(  '=============')
-    build_dir = install_dir+os.sep+'cism_build'
-    test_dir = data_dir+os.sep+'test_'+time_stamp+'_'+cism_hash
+    build_dir = os.path.join(install_dir, 'cism_build')
+    test_dir = os.path.join(data_dir, 'test_'+time_stamp+'_'+cism_hash)
     bats_command = ['source deactivate;',
                     'source activate BATS;',
                     './build_and_test.py', 
@@ -229,14 +229,14 @@ def main():
     if args.timing:
         bats_command.extend(['--timing', '--sleep', '360'])
 
-    subprocess.check_call(' '.join(bats_command), cwd=args.cism+os.sep+'tests'+os.sep+'regression', 
+    subprocess.check_call(' '.join(bats_command), cwd=os.path.join(args.cism,'tests','regression'), 
             shell=True, executable='/bin/bash')
 
 
     # run LIVV
     print('\nRunning LIVVkit:')
     print(  '================')
-    out_dir = data_dir+os.sep+'www_'+time_stamp+'_'+livv_hash
+    out_dir = os.path.join(data_dir,'www_'+time_stamp+'_'+livv_hash)
     livv_comment = 'Nightly regression test of CISM using commit '+cism_hash \
                     +', and LIVVkit commit '+livv_hash+'.'
 
@@ -252,10 +252,13 @@ def main():
             shell=True, executable='/bin/bash')
 
     # tar directories
+    print('\nCleaning up the data:')
+    print(  '=====================')
+    
     with tarfile.open(test_dir+".tar.gz","w:gz", dereference=True) as tar:
         tar.add(test_dir, arcname=os.path.basename(test_dir))
     
-    bench_name = data_dir+os.sep+'bench_'+time_stamp+'_'+args.bench_hash
+    bench_name = os.path.join(data_dir,'bench_'+time_stamp+'_'+args.bench_hash)
     with tarfile.open(bench_name+".tar.gz","w:gz", dereference=True) as tar:
         tar.add(args.bench_dir, arcname=os.path.basename(bench_name))
     
@@ -269,6 +272,8 @@ def main():
 
     # make/update website
     # -------------------
+    print('\nMaking the website:')
+    print(  '===================')
     nights_details, weeks_details = choose_tarballs(data_dir, args)
 
 
@@ -324,8 +329,10 @@ def main():
 
 
     # start generating website
-    dir_util.copy_tree(abs_existing_dir(os.path.join('web','imgs')), args.nightly_output_dir+os.sep+'imgs')
-    dir_util.copy_tree(abs_existing_dir(os.path.join('web','css')), args.nightly_output_dir+os.sep+'css')
+    dir_util.copy_tree(abs_existing_dir(os.path.join('web','imgs')), 
+            os.path.join(args.nightly_output_dir,'imgs'))
+    dir_util.copy_tree(abs_existing_dir(os.path.join('web','css')), 
+            os.path.join(args.nightly_output_dir,'css'))
    
     template_dir = abs_existing_dir(os.path.join('web','templates'))
     template_loader = jinja2.FileSystemLoader([template_dir, install_dir])
@@ -350,8 +357,11 @@ def main():
     template = template_env.get_template('index-template.html')
     template_output = template.render(template_vars)
 
-    with open(args.nightly_output_dir+os.sep+'index.html', 'w') as index:
+    with open(os.path.join(args.nightly_output_dir,'index.html'), 'w') as index:
         index.write(template_output)
+
+    print('\nFinished!\n')
+
 
 if __name__=='__main__':
     args = parser.parse_args()
