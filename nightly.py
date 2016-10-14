@@ -223,6 +223,7 @@ def main():
                     'source activate BATS;',
                     './build_and_test.py', 
                         '-b', build_dir, 
+                        '-p', 'linux-gnu-gptl', 
                         '-o', test_dir,
                     ]
     
@@ -243,7 +244,7 @@ def main():
     livv_command = ['source deactivate;',
                     'source activate LIVVkit;',
                     './livv',
-                        '-v', os.path.join(test_dir, 'linux-gnu', 'CISM-glissade'), args.bench_dir, 
+                        '-v', os.path.join(test_dir, 'linux-gnu-gptl', 'CISM-glissade'), args.bench_dir, 
                         '-o', out_dir
                     ]
                     #    '-c', livv_comment,
