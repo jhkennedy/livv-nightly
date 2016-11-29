@@ -315,7 +315,7 @@ def main():
     
         # get data from Previous LIVVkit runs:
         weeks_data = {}
-        with open(os.path.join(data_dir, weeks_details[ndl][0], 'index.json')) as wd:
+        with open(os.path.join(data_dir, weeks_details[wdl][0], 'index.json')) as wd:
             weeks_data = json.load(wd)
         
         # The b4b-ness for all tests. 
@@ -326,7 +326,7 @@ def main():
                     for scale in test.values():
                         b4b_details += numpy.array(scale['Bit for Bit'])
 
-        weeks_b4b[ndl] = (str(b4b_details[0]), str(b4b_details[1]))
+        weeks_b4b[wdl] = (str(b4b_details[0]), str(b4b_details[1]))
 
 
     # start generating website
